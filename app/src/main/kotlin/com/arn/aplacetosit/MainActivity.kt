@@ -52,6 +52,7 @@ import com.arn.aplacetosit.core.SessionPhase
 import com.arn.aplacetosit.core.TimerEngine
 import com.arn.aplacetosit.data.AppStore
 import com.arn.aplacetosit.ui.AwarenessScreen
+import com.arn.aplacetosit.ui.AboutScreen
 import com.arn.aplacetosit.ui.GanzfeldField
 import com.arn.aplacetosit.ui.LogScreen2
 import com.arn.aplacetosit.ui.LocalPalette
@@ -105,9 +106,16 @@ fun AppRoot(store: AppStore) {
         SittingService.onNaturalEnd = { end(completedAutomatically = true) }
     }
 
+    var showsGate by remember { mutableStateOf(false) }
     val active = session
     when {
         !seenGate -> HowThisWorks { seenGate = true }
+        showsGate -> HowThisWorks { showsGate = false }
+        route == "about" -> AboutScreen(
+            versionName = "0.1.0",
+            onHowThisWorks = { showsGate = true },
+            onBack = { route = "home" },
+        )
         active != null -> SessionScreen(active, onEnd = { end(false) })
         route == "log" -> {
             var editing by remember { mutableStateOf<MeditationRecord?>(null) }
@@ -156,6 +164,8 @@ fun AppRoot(store: AppStore) {
             },
             onLog = { route = "log" },
             onAware = { route = "aware" },
+            onHelp = { showsGate = true },
+            onAbout = { route = "about" },
         )
     }
 }
@@ -219,7 +229,13 @@ fun UnderlinedChoice(label: String, selected: Boolean, onClick: () -> Unit) {
 // MARK: screens
 
 @Composable
-fun HomeScreen(onBegin: (Int, Boolean) -> Unit, onLog: () -> Unit, onAware: () -> Unit) {
+fun HomeScreen(
+    onBegin: (Int, Boolean) -> Unit,
+    onLog: () -> Unit,
+    onAware: () -> Unit,
+    onHelp: () -> Unit,
+    onAbout: () -> Unit,
+) {
     val p = LocalPalette.current
     var minutes by remember { mutableStateOf(45) }
     var guided by remember { mutableStateOf(false) }
@@ -227,9 +243,11 @@ fun HomeScreen(onBegin: (Int, Boolean) -> Unit, onLog: () -> Unit, onAware: () -
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Eyebrow("VIPASSANA TIMER")
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Aware", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAware))
                     Text("Log", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onLog))
+                    Text("?", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onHelp))
+                    Text("i", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAbout))
                 }
             }
             Spacer(Modifier.height(26.dp))
