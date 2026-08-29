@@ -50,10 +50,12 @@ import com.arn.aplacetosit.core.SessionClock
 import com.arn.aplacetosit.core.SessionPhase
 import com.arn.aplacetosit.core.TimerEngine
 import com.arn.aplacetosit.data.AppStore
+import com.arn.aplacetosit.ui.AwarenessScreen
 import com.arn.aplacetosit.ui.GanzfeldField
 import com.arn.aplacetosit.ui.LocalPalette
 import com.arn.aplacetosit.ui.PlaceToSitTheme
 import kotlinx.coroutines.delay
+import kotlin.random.Random
 
 /**
  * V1, deliberately small: silent and guided sittings, a log with private
@@ -108,6 +110,19 @@ fun AppRoot(store: AppStore) {
         route == "log" -> LogScreen(records, store, onBack = { route = "home" }) {
             records = store.loadRecords()
         }
+        route == "aware" -> AwarenessScreen(
+            onBegin = { hours, interval ->
+                val s = if (interval == null) {
+                    TimerEngine.startAwarenessRandom(hours, now(), Random)
+                } else {
+                    TimerEngine.startAwarenessFixed(hours, interval, now())
+                }
+                store.persistActive(s)
+                SittingService.Companion.start(storeContext(), s)
+                session = s
+            },
+            onBack = { route = "home" },
+        )
         else -> HomeScreen(
             onBegin = { minutes, guided ->
                 val s = TimerEngine.startStandard(minutes, now(), guidedMinutes = if (guided) minutes else null)
@@ -116,6 +131,7 @@ fun AppRoot(store: AppStore) {
                 session = s
             },
             onLog = { route = "log" },
+            onAware = { route = "aware" },
         )
     }
 }
@@ -178,7 +194,7 @@ fun UnderlinedChoice(label: String, selected: Boolean, onClick: () -> Unit) {
 // MARK: screens
 
 @Composable
-fun HomeScreen(onBegin: (Int, Boolean) -> Unit, onLog: () -> Unit) {
+fun HomeScreen(onBegin: (Int, Boolean) -> Unit, onLog: () -> Unit, onAware: () -> Unit) {
     val p = LocalPalette.current
     var minutes by remember { mutableStateOf(45) }
     var guided by remember { mutableStateOf(false) }
@@ -186,7 +202,10 @@ fun HomeScreen(onBegin: (Int, Boolean) -> Unit, onLog: () -> Unit) {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Eyebrow("VIPASSANA TIMER")
-                Text("Log", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onLog))
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text("Aware", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAware))
+                    Text("Log", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onLog))
+                }
             }
             Spacer(Modifier.height(26.dp))
             SerifTitle("A place\nto sit.")
@@ -246,7 +265,13 @@ fun SessionScreen(session: ActiveSession, onEnd: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.weight(0.7f))
-            Eyebrow(if (snapshot.phase == SessionPhase.PREPARING) "PREPARING" else "MEDITATION")
+            Eyebrow(
+                when {
+                    snapshot.phase == SessionPhase.PREPARING -> "PREPARING"
+                    session.mode == com.arn.aplacetosit.core.SessionMode.AWARENESS -> "AWARENESS MODE"
+                    else -> "MEDITATION"
+                }
+            )
             Spacer(Modifier.height(24.dp))
             Text(
                 DurationFormatter.countdown(snapshot.remainingMillis),
@@ -254,6 +279,15 @@ fun SessionScreen(session: ActiveSession, onEnd: () -> Unit) {
                 fontWeight = FontWeight.Light, fontSize = 64.sp,
             )
             Eyebrow("REMAINING")
+            if (session.mode == com.arn.aplacetosit.core.SessionMode.AWARENESS) {
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    if (session.gongOffsetsMillis != null) "At random"
+                    else "Every ${'$'}{(session.intervalMillis ?: 0) / 60_000} minutes",
+                    color = p.muted, fontSize = 15.sp,
+                )
+                Eyebrow("GONGS")
+            }
             Spacer(Modifier.weight(1f))
             Box(
                 Modifier
@@ -281,6 +315,7 @@ fun HowThisWorks(onBegin: () -> Unit) {
             listOf(
                 "SILENT" to "One gong to begin, three to end. Nothing in between.",
                 "GUIDED" to "The same sitting, with minimal spoken Vipassana guidance.",
+                "AWARE" to "Gongs through your day, up to 24 hours — at your interval, or at moments you can't predict.",
                 "LOG" to "Every sitting is saved on this phone; open one to leave a note.",
             ).forEach { (name, line) ->
                 Column(Modifier.padding(vertical = 11.dp)) {

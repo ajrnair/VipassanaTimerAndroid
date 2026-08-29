@@ -165,10 +165,10 @@ object TimerEngine {
                     }
                 }
             } else {
-                val interval = session.intervalMillis
-                if (interval != null && interval > 0) {
+                val interval = session.intervalMillis ?: 0L
+                if (interval > 0) {
                     var index = 1
-                    var offset = interval
+                    var offset: Long = interval
                     while (offset < session.plannedDurationMillis) {
                         add(TimedEvent(TimerEvent.AwarenessInterval(index), offset))
                         index += 1
