@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -349,8 +351,19 @@ fun SessionScreen(session: ActiveSession, onEnd: () -> Unit) {
 fun HowThisWorks(onBegin: () -> Unit) {
     val p = LocalPalette.current
     GanzfeldField(peak = 0.2f, centerY = 0.38f) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
-            Spacer(Modifier.height(28.dp))
+        // fillMaxSize before verticalScroll pins the height and the content
+        // never scrolls; fillMaxWidth plus the scroll is what actually gives
+        // a short phone a way to reach Begin.
+        // systemBarsPadding must sit outside the scroll, or the content slides
+        // up under the status bar as it moves.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .systemBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(30.dp)
+        ) {
+            Spacer(Modifier.height(20.dp))
             SerifTitle("How this\nworks.")
             Spacer(Modifier.height(12.dp))
             Text("A privacy-first timer for Vipassana practice.", color = p.muted, fontSize = 16.sp)
@@ -374,9 +387,9 @@ fun HowThisWorks(onBegin: () -> Unit) {
                 "Gongs play with the phone locked. Nothing leaves this phone.",
                 color = p.patina, fontSize = 13.sp,
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(26.dp))
             Box(Modifier.align(Alignment.CenterHorizontally)) { CapsuleButton("Begin", onBegin) }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(28.dp))
         }
     }
 }
