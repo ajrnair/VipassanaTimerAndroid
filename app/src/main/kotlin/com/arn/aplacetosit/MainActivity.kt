@@ -53,6 +53,7 @@ import com.arn.aplacetosit.core.TimerEngine
 import com.arn.aplacetosit.data.AppStore
 import com.arn.aplacetosit.ui.AwarenessScreen
 import com.arn.aplacetosit.ui.GanzfeldField
+import com.arn.aplacetosit.ui.LogScreen2
 import com.arn.aplacetosit.ui.LocalPalette
 import com.arn.aplacetosit.ui.PlaceToSitTheme
 import kotlinx.coroutines.delay
@@ -108,8 +109,30 @@ fun AppRoot(store: AppStore) {
     when {
         !seenGate -> HowThisWorks { seenGate = true }
         active != null -> SessionScreen(active, onEnd = { end(false) })
-        route == "log" -> LogScreen(records, store, onBack = { route = "home" }) {
-            records = store.loadRecords()
+        route == "log" -> {
+            var editing by remember { mutableStateOf<MeditationRecord?>(null) }
+            LogScreen2(records, onBack = { route = "home" }, onOpen = { editing = it })
+            editing?.let { record ->
+                NoteEditor(
+                    record,
+                    onDismiss = { editing = null },
+                    onDelete = {
+                        store.delete(record.id)
+                        editing = null
+                        records = store.loadRecords()
+                    },
+                ) { note, minutes ->
+                    store.save(
+                        record.copy(
+                            note = note.ifBlank { null },
+                            creditedDurationSeconds = minutes * 60.0,
+                            modifiedAt = MeditationRecord.iso(System.currentTimeMillis()),
+                        )
+                    )
+                    editing = null
+                    records = store.loadRecords()
+                }
+            }
         }
         route == "aware" -> AwarenessScreen(
             onBegin = { hours, interval ->
@@ -341,89 +364,49 @@ fun HowThisWorks(onBegin: () -> Unit) {
 }
 
 @Composable
-fun LogScreen(
-    records: List<MeditationRecord>,
-    store: AppStore,
-    onBack: () -> Unit,
-    onChanged: () -> Unit,
+fun NoteEditor(
+    record: MeditationRecord,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit,
+    onSave: (String, Int) -> Unit,
 ) {
     val p = LocalPalette.current
-    var editing by remember { mutableStateOf<MeditationRecord?>(null) }
-    GanzfeldField(peak = 0.14f, centerY = 0.86f) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Eyebrow("PRACTICE")
-                Text("Sit", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onBack))
-            }
-            Spacer(Modifier.height(26.dp))
-            SerifTitle("Meditation\nlog")
-            Spacer(Modifier.height(10.dp))
-            if (records.isEmpty()) {
-                Spacer(Modifier.height(60.dp))
-                Text(
-                    "Your first completed sitting will appear here. Sessions stay on this device.",
-                    color = p.patina, fontFamily = FontFamily.Serif, fontSize = 20.sp,
-                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                LazyColumn {
-                    items(records, key = { it.id }) { record ->
-                        Column(
-                            Modifier.fillMaxWidth()
-                                .clickable { editing = record }
-                                .padding(vertical = 12.dp),
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column {
-                                    Text(
-                                        record.endedAt.take(10), color = p.text,
-                                        fontFamily = FontFamily.Serif, fontSize = 19.sp,
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(record.endedAt.drop(11).take(5), color = p.patina, fontSize = 12.sp)
-                                        if (!record.note.isNullOrEmpty()) {
-                                            Spacer(Modifier.size(6.dp))
-                                            Box(Modifier.size(3.dp).background(p.patina))
-                                        }
-                                    }
-                                }
-                                Text(
-                                    DurationFormatter.concise(record.creditedMillis),
-                                    color = p.accent, fontSize = 15.sp,
-                                )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Box(Modifier.height(1.dp).fillMaxWidth().background(p.border.copy(alpha = 0.5f)))
-                        }
-                    }
-                }
-            }
-        }
-        editing?.let { record ->
-            NoteEditor(record, onDismiss = { editing = null }) { note ->
-                store.save(record.copy(note = note.ifBlank { null }, modifiedAt = MeditationRecord.iso(System.currentTimeMillis())))
-                editing = null
-                onChanged()
-            }
-        }
-    }
-}
-
-@Composable
-fun NoteEditor(record: MeditationRecord, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    val p = LocalPalette.current
     var note by remember { mutableStateOf(record.note ?: "") }
-    GanzfeldField(peak = 0.22f, centerY = 0.45f) {
+    var minutes by remember { mutableStateOf((record.creditedMillis / 60_000).toInt().coerceAtLeast(1)) }
+    var confirmingDelete by remember { mutableStateOf(false) }
+    com.arn.aplacetosit.ui.GanzfeldField(peak = 0.22f, centerY = 0.45f) {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 SerifTitle("Edit\nsession")
                 Text("Cancel", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onDismiss))
             }
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(28.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Duration", color = p.text, fontSize = 16.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(
+                        Modifier.size(38.dp).border(1.dp, p.border, CircleShape)
+                            .clickable { if (minutes > 1) minutes -= 1 },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("−", color = p.text, fontSize = 17.sp) }
+                    Text(
+                        "$minutes min", color = p.text, fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Light, fontSize = 21.sp,
+                    )
+                    Box(
+                        Modifier.size(38.dp).border(1.dp, p.border, CircleShape)
+                            .clickable { if (minutes < 1440) minutes += 1 },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("+", color = p.text, fontSize = 17.sp) }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.height(1.dp).fillMaxWidth().background(p.border.copy(alpha = 0.5f)))
+            Spacer(Modifier.height(26.dp))
             Eyebrow("NOTE")
             Spacer(Modifier.height(8.dp))
             BasicTextField(
@@ -431,12 +414,20 @@ fun NoteEditor(record: MeditationRecord, onDismiss: () -> Unit, onSave: (String)
                 onValueChange = { note = it },
                 textStyle = TextStyle(color = p.text, fontSize = 16.sp),
                 cursorBrush = SolidColor(p.accent),
-                modifier = Modifier.fillMaxWidth().height(140.dp),
+                modifier = Modifier.fillMaxWidth().height(130.dp),
             )
             Box(Modifier.height(1.dp).fillMaxWidth().background(p.border.copy(alpha = 0.5f)))
             Spacer(Modifier.weight(1f))
-            Box(Modifier.align(Alignment.CenterHorizontally)) { CapsuleButton("Save") { onSave(note.trim()) } }
-            Spacer(Modifier.height(20.dp))
+            Box(Modifier.align(Alignment.CenterHorizontally)) { CapsuleButton("Save") { onSave(note.trim(), minutes) } }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                if (confirmingDelete) "Tap again to delete this session" else "Delete this session",
+                color = if (confirmingDelete) p.accent else p.patina, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally).clickable {
+                    if (confirmingDelete) onDelete() else confirmingDelete = true
+                },
+            )
+            Spacer(Modifier.height(18.dp))
         }
     }
 }

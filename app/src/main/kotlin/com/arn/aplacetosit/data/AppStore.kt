@@ -31,6 +31,10 @@ class AppStore(context: Context) {
         tmp.renameTo(File(historyDir, "${record.id}.json"))
     }
 
+    fun delete(id: String) {
+        File(historyDir, "$id.json").delete()
+    }
+
     fun persistActive(session: ActiveSession?) {
         if (session == null) {
             stateFile.delete()
