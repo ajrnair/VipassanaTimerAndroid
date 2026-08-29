@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -123,10 +124,11 @@ private fun randomCaption(hours: Int): String {
 private fun Chip(label: String, selected: Boolean, selectedColor: Color, onClick: () -> Unit) {
     val p = LocalPalette.current
     Column(
-        Modifier.clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 2.dp),
+        Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Min)
+            .clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, color = if (selected) selectedColor else p.patina, fontSize = 15.sp)
+        Text(label, color = if (selected) selectedColor else p.patina, fontSize = 15.sp, maxLines = 1)
         Spacer(Modifier.height(6.dp))
         Box(
             Modifier.height(1.dp).fillMaxWidth()
