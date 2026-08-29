@@ -130,27 +130,53 @@ class SittingService : Service() {
             SessionClock(System.currentTimeMillis(), SystemClock.elapsedRealtime()),
         ) // timeline-relative; preparation included
 
+    /**
+     * A gong outlives its caller: nothing on the stack holds a MediaPlayer
+     * once prepareAsync() returns, so a one-shot cue must be kept in a live
+     * set until it finishes or it is collected mid-preparation and never
+     * sounds. (It was created — the audio service logged it — and then died
+     * silently, which is exactly what a locked-phone test looked like.)
+     */
+    private val oneShots = mutableSetOf<MediaPlayer>()
+
     private fun playAsset(path: String, seekTo: Long = 0, onDone: (() -> Unit)? = null) {
         if (onDone != null) releasePlayer()
         val mp = MediaPlayer()
+        // Attributes must be set before the data source, or they are ignored
+        // and the player lands on USAGE_UNKNOWN.
         mp.setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
         )
-        assets.openFd(path).use { fd ->
-            mp.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+        try {
+            assets.openFd(path).use { fd ->
+                mp.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+            }
+        } catch (error: Exception) {
+            mp.release()
+            return
         }
-        mp.setOnPreparedListener {
-            if (seekTo > 0) mp.seekTo(seekTo.toInt())
-            mp.start()
+        mp.setOnPreparedListener { player ->
+            if (seekTo > 0) player.seekTo(seekTo.toInt())
+            player.start()
         }
-        mp.setOnCompletionListener {
-            if (onDone != null) { onDone() } else { mp.release() }
+        mp.setOnErrorListener { player, _, _ ->
+            oneShots.remove(player)
+            player.release()
+            true
+        }
+        mp.setOnCompletionListener { player ->
+            if (onDone != null) {
+                onDone()
+            } else {
+                oneShots.remove(player)
+                player.release()
+            }
         }
         mp.prepareAsync()
-        if (onDone != null) player = mp
+        if (onDone != null) player = mp else oneShots.add(mp)
     }
 
     private fun naturalEnd() {
@@ -170,6 +196,8 @@ class SittingService : Service() {
     private fun releasePlayer() {
         player?.release()
         player = null
+        oneShots.forEach { runCatching { it.release() } }
+        oneShots.clear()
     }
 
     private fun notification(): Notification {

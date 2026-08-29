@@ -243,14 +243,19 @@ fun HomeScreen(
     var guided by remember { mutableStateOf(false) }
     GanzfeldField {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(30.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Eyebrow("VIPASSANA TIMER")
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Aware", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAware))
-                    Text("Log", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onLog))
-                    Text("?", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onHelp))
-                    Text("i", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAbout))
-                }
+            // The eyebrow's letter-spacing leaves no room for four links beside
+            // it on a 1080-wide phone, so the links take their own line.
+            Eyebrow("VIPASSANA TIMER")
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+            ) {
+                Text("Aware", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAware))
+                Text("Log", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onLog))
+                Spacer(Modifier.weight(1f))
+                Text("?", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onHelp))
+                Text("i", color = p.patina, fontSize = 15.sp, modifier = Modifier.clickable(onClick = onAbout))
             }
             Spacer(Modifier.height(26.dp))
             SerifTitle("A place\nto sit.")
